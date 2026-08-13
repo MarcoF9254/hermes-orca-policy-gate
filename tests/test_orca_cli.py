@@ -1,8 +1,18 @@
+import os
+import sys
+
 import pytest
 from hermes_orca_gate.errors import DeniedError, InputError, OutcomeSchemaError, ReconciliationRequired
 from hermes_orca_gate.models import TypedRequest
-from hermes_orca_gate.orca_cli import OrcaAdapter, OrcaDiscovery, parse_raw_flags
+from hermes_orca_gate.orca_cli import OrcaAdapter, OrcaDiscovery, parse_raw_flags, subprocess_runner
 from test_service import context, dispatch_data
+
+
+def test_runner_decodes_utf8_not_machine_locale(tmp_path):
+    script = tmp_path / 'emit.py'
+    script.write_text('import sys; sys.stdout.buffer.write(b"{\\"objective\\":\\"\\xe2\\x80\\x94\\"}")', encoding='utf-8')
+    code, out, err = subprocess_runner([sys.executable, str(script)], cwd=str(tmp_path), env=dict(os.environ), shell=False)
+    assert code == 0 and '—' in out
 
 
 class Runner:
@@ -21,13 +31,21 @@ def test_adapter_mechanical_argv_and_no_shell():
     assert env == context()['execution_relevant_env']
 
 
-def test_run_id_flag_differs_per_subcommand():
-    def argv(command):
-        return OrcaAdapter().build_argv(TypedRequest.from_dict({'command': command, 'args': {'run_id': 'R'}, 'context': context()}))
-    show = argv('orchestration.runShow')
+def build(command, args):
+    return OrcaAdapter().build_argv(TypedRequest.from_dict({'command': command, 'args': args, 'context': context()}))
+
+
+def test_per_subcommand_flag_spellings():
+    show = build('orchestration.runShow', {'run_id': 'R'})
     assert show[show.index('--id') + 1] == 'R' and '--run' not in show
-    listed = argv('orchestration.taskList')
+    listed = build('orchestration.taskList', {'run_id': 'R'})
     assert listed[listed.index('--run') + 1] == 'R' and '--id' not in listed
+    current = build('orchestration.runCurrent', {'terminal_handle': 'H'})
+    assert current[current.index('--from') + 1] == 'H' and '--terminal' not in current
+    preamble = build('orchestration.dispatchShow', {'task_id': 'T', 'return_preamble': True})
+    assert '--preamble' in preamble and '--return-preamble' not in preamble
+    dispatch = build('orchestration.dispatch', {'run_id': 'R', 'task_id': 'T', 'to_handle': 'To', 'from_handle': 'F', 'inject': False, 'return_preamble': True, 'dry_run': False})
+    assert '--return-preamble' in dispatch and '--preamble' not in dispatch
 
 
 def test_raw_flag_parser_equivalence_duplicates_and_refusals():
@@ -375,7 +393,7 @@ def test_existing_terminal_is_cross_checked_against_exact_worktree():
         calls.append(argv)
         command = tuple(argv[1:3])
         if command == ("orchestration", "run-current"):
-            terminal = argv[argv.index("--terminal") + 1]
+            terminal = argv[argv.index("--from") + 1]
             if terminal == "Target-Terminal":
                 result = {
                     "runId": "R",

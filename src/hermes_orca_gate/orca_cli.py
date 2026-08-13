@@ -84,6 +84,7 @@ def subprocess_runner(
         env=env,
         shell=shell,
         text=True,
+        encoding="utf-8",  # Orca emits UTF-8; text=True would otherwise decode with the machine locale.
         capture_output=True,
         check=False,
         timeout=None if timeout_ms is None else timeout_ms / 1000,
@@ -130,6 +131,8 @@ class DiscoverySnapshot:
 # Orca spells the same argument differently per subcommand: run-show takes --id, task-list --run.
 COMMAND_FLAG_OVERRIDES: dict[str, dict[str, str]] = {
     "orchestration.runShow": {"run_id": "--id"},
+    "orchestration.runCurrent": {"terminal_handle": "--from"},
+    "orchestration.dispatchShow": {"return_preamble": "--preamble"},
 }
 
 
@@ -188,7 +191,8 @@ class OrcaAdapter:
             "condition": "--for",
             "timeout_ms": "--timeout-ms",
         }
-        flags.update(COMMAND_FLAG_OVERRIDES.get(command, {}))
+        overrides = COMMAND_FLAG_OVERRIDES.get(command, {})
+        flags.update(overrides)
         for key, value in args.items():
             if key == "resolved_worktree_id" or value is None:
                 continue
@@ -197,7 +201,7 @@ class OrcaAdapter:
                     argv.append("--dry-run")
             elif key in {"inject", "return_preamble"}:
                 if value:
-                    argv.append("--" + key.replace("_", "-"))
+                    argv.append(overrides.get(key, "--" + key.replace("_", "-")))
             elif key in flags:
                 argv.extend([flags[key], str(value)])
         if orca_request_id is not None:
