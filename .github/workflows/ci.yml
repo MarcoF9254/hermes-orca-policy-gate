@@ -1,0 +1,54 @@
+name: deterministic-validation
+
+on:
+  pull_request:
+  push:
+    branches: [main, feat/v1-policy-gate]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: 0.11.29
+          enable-cache: false
+
+      - name: Verify lock file
+        run: uv lock --check
+
+      - name: Install locked test group
+        run: uv sync --locked --group test
+
+      - name: Compile and import runtime
+        run: |
+          uv run --locked python -m compileall -q src tests
+          uv run --locked python -c "import hermes_orca_gate; import hermes_orca_gate.cli; import hermes_orca_gate.service; import hermes_orca_gate.stores"
+
+      - name: Run deterministic tests
+        run: uv run --locked python -m pytest -q
+
+      - name: Check patch whitespace
+        run: git diff --check

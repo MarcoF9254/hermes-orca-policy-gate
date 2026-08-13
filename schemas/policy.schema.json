@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hermes-orca-policy-gate/policy-v1.schema.json",
+  "title": "Hermes-Orca Policy Gate v1 policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "default", "source_contract_sha", "freshness_max_age_ms", "observation", "rules"],
+  "properties": {
+    "version": {"const": 1},
+    "default": {"type": "object", "additionalProperties": false, "required": ["action"], "properties": {"action": {"const": "block"}}},
+    "source_contract_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "freshness_max_age_ms": {
+      "type": "object", "additionalProperties": false,
+      "required": ["orchestration.dispatch", "orchestration.workerStart", "orchestration.workerStop", "orchestration.workerAbandon", "orchestration.workerShow"],
+      "properties": {
+        "orchestration.dispatch": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "orchestration.workerStart": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "orchestration.workerStop": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "orchestration.workerAbandon": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "orchestration.workerShow": {"type": "integer", "minimum": 1, "maximum": 60000}
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["interval_ms", "qualifying_checkpoints", "probe_timeout_ms", "default_ceiling_ms"],
+      "properties": {
+        "interval_ms": {"const": 60000},
+        "qualifying_checkpoints": {"const": 3},
+        "probe_timeout_ms": {"const": 60000},
+        "default_ceiling_ms": {"const": 2700000}
+      }
+    },
+    "rules": {"type": "array", "items": {"$ref": "#/$defs/rule"}}
+  },
+  "$defs": {
+    "rule": {
+      "type": "object", "additionalProperties": false, "required": ["id", "match", "action"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "action": {"enum": ["allow", "require_approval", "block", "reconciliation_required"]},
+        "match": {
+          "type": "object", "additionalProperties": false, "minProperties": 1, "required": ["normalized_command"],
+          "properties": {
+            "normalized_command": {"enum": ["orchestration.dispatch", "orchestration.workerStart", "orchestration.workerStop", "orchestration.workerAbandon", "orchestration.workerShow", "orchestration.dispatchDryRun", "orchestration.runCurrent", "orchestration.runShow", "orchestration.taskList", "orchestration.dispatchShow", "orchestration.workerRead", "terminal.read", "terminal.wait"]},
+            "state_class": {"enum": ["RUNTIME_UNKNOWN", "CIRCUIT_BROKEN", "FAILED", "STARTING", "STOPPING", "STOPPED", "OBSERVATION_PENDING", "OK"]},
+            "target_instance_identity": {"type": "string"},
+            "repo_id": {"type": "string"},
+            "context_digest": {"type": "string"},
+            "approved_action": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

@@ -24,3 +24,6 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Agent working context, not part of the repository
+.hermes/
