@@ -21,6 +21,15 @@ def test_adapter_mechanical_argv_and_no_shell():
     assert env == context()['execution_relevant_env']
 
 
+def test_run_id_flag_differs_per_subcommand():
+    def argv(command):
+        return OrcaAdapter().build_argv(TypedRequest.from_dict({'command': command, 'args': {'run_id': 'R'}, 'context': context()}))
+    show = argv('orchestration.runShow')
+    assert show[show.index('--id') + 1] == 'R' and '--run' not in show
+    listed = argv('orchestration.taskList')
+    assert listed[listed.index('--run') + 1] == 'R' and '--id' not in listed
+
+
 def test_raw_flag_parser_equivalence_duplicates_and_refusals():
     schema = {'--run': 'value', '--inject': 'bool'}
     assert parse_raw_flags(['--run=Run-A', '--inject'], schema) == parse_raw_flags(['--run', 'Run-A', '--inject'], schema)

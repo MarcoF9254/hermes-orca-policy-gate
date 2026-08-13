@@ -127,6 +127,12 @@ class DiscoverySnapshot:
         return canonical_digest(self.evidence)
 
 
+# Orca spells the same argument differently per subcommand: run-show takes --id, task-list --run.
+COMMAND_FLAG_OVERRIDES: dict[str, dict[str, str]] = {
+    "orchestration.runShow": {"run_id": "--id"},
+}
+
+
 class OrcaAdapter:
     def __init__(self, runner: Runner = subprocess_runner):
         self.runner = runner
@@ -182,6 +188,7 @@ class OrcaAdapter:
             "condition": "--for",
             "timeout_ms": "--timeout-ms",
         }
+        flags.update(COMMAND_FLAG_OVERRIDES.get(command, {}))
         for key, value in args.items():
             if key == "resolved_worktree_id" or value is None:
                 continue
